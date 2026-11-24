@@ -1,0 +1,32 @@
+debconf: unable to initialize frontend: Dialog
+debconf: (Dialog frontend will not work on a dumb terminal, an emacs shell buffer, or without a controlling terminal.)
+debconf: falling back to frontend: Readline
+debconf: unable to initialize frontend: Readline
+debconf: (This frontend requires a controlling tty.)
+debconf: falling back to frontend: Teletype
+dpkg-preconfigure: unable to re-open stdin: 
+debconf: unable to initialize frontend: Dialog
+debconf: (Dialog frontend will not work on a dumb terminal, an emacs shell buffer, or without a controlling terminal.)
+debconf: falling back to frontend: Readline
+debconf: unable to initialize frontend: Readline
+debconf: (This frontend requires a controlling tty.)
+debconf: falling back to frontend: Teletype
+
+Running kernel seems to be up-to-date.
+
+No services need to be restarted.
+
+No containers need to be restarted.
+
+No user sessions are running outdated binaries.
+
+No VM guests are running outdated hypervisor (qemu) binaries on this host.
+-rwxrwxr-x 1 ubuntu ubuntu 1899216 Nov 24 05:13 cadical/build/cadical
+-rwxrwxr-x 1 ubuntu ubuntu  657032 Nov 24 05:13 cake_lpr/cake_lpr
+-rwxrwxr-x 1 ubuntu ubuntu   22064 Nov 24 05:13 drat-trim/lrat-check
+-rwxrwxr-x 1 ubuntu ubuntu   76832 Nov 24 05:13 lrat-trim/lrat-trim
+cadical e4d9bd9
+lrat-trim 4231949
+drat-trim 2e3b2dc
+cake_lpr 033aad5
+SETUP-DONE

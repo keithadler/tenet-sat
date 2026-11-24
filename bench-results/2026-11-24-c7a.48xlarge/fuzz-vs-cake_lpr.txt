@@ -1,0 +1,6 @@
+== r250 (random 3-SAT, 250 vars, CaDiCaL LRAT, 76401 lines)
+tenetsat=reject cake_lpr=reject: 200
+tenetsat=accept cake_lpr=accept: 100
+== php9 (pigeonhole 10 into 9, CaDiCaL LRAT, 556303 lines)
+tenetsat=reject cake_lpr=reject: 192
+tenetsat=accept cake_lpr=accept: 108

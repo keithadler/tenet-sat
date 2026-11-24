@@ -1,0 +1,29 @@
+lrat-trim: error: can not write to '/home/ubuntu/proofs/953e9ff735bdf5ada27b0ab2b908b6af.blrat' with '--no-trim'
+ls: cannot access '/home/ubuntu/proofs/953e9ff735bdf5ada27b0ab2b908b6af.blrat': No such file or directory
+5494989932 /home/ubuntu/proofs/953e9ff735bdf5ada27b0ab2b908b6af.lrat
+cat: /home/ubuntu/proofs/953e9ff735bdf5ada27b0ab2b908b6af.blrat: No such file or directory
+953e9ff735bdf5ada27b0ab2b908b6af.lrat,batch=32MB,threads=8,wall=12.557925022,c parse 5.653s register 2.096s check 4.513s sequential 0.001s cnf 0.010s total 12.276s,s VERIFIED
+953e9ff735bdf5ada27b0ab2b908b6af.lrat,batch=32MB,threads=32,wall=10.403410190,c parse 5.425s register 2.411s check 2.243s sequential 0.020s cnf 0.010s total 10.110s,s VERIFIED
+953e9ff735bdf5ada27b0ab2b908b6af.lrat,batch=32MB,threads=64,wall=11.115818458,c parse 6.441s register 2.536s check 1.780s sequential 0.016s cnf 0.010s total 10.784s,s VERIFIED
+953e9ff735bdf5ada27b0ab2b908b6af.lrat,batch=32MB,threads=192,wall=14.835211618,c parse 9.759s register 2.848s check 1.847s sequential 0.027s cnf 0.010s total 14.491s,s VERIFIED
+953e9ff735bdf5ada27b0ab2b908b6af.lrat,batch=256MB,threads=8,wall=9.494647405,c parse 4.260s register 0.696s check 4.243s sequential 0.001s cnf 0.010s total 9.211s,s VERIFIED
+953e9ff735bdf5ada27b0ab2b908b6af.lrat,batch=256MB,threads=32,wall=7.558810462,c parse 4.150s register 0.565s check 2.268s sequential 0.001s cnf 0.010s total 6.997s,s VERIFIED
+953e9ff735bdf5ada27b0ab2b908b6af.lrat,batch=256MB,threads=64,wall=6.778790935,c parse 3.819s register 0.698s check 1.563s sequential 0.002s cnf 0.010s total 6.093s,s VERIFIED
+953e9ff735bdf5ada27b0ab2b908b6af.lrat,batch=256MB,threads=192,wall=9.923905736,c parse 7.014s register 0.636s check 1.584s sequential 0.019s cnf 0.010s total 9.265s,s VERIFIED
+953e9ff735bdf5ada27b0ab2b908b6af.lrat,batch=1024MB,threads=8,wall=8.141628431,c parse 3.854s register 0.536s check 3.498s sequential 0.000s cnf 0.009s total 7.900s,s VERIFIED
+953e9ff735bdf5ada27b0ab2b908b6af.lrat,batch=1024MB,threads=32,wall=6.595787837,c parse 3.568s register 0.404s check 1.542s sequential 0.001s cnf 0.010s total 5.527s,s VERIFIED
+953e9ff735bdf5ada27b0ab2b908b6af.lrat,batch=1024MB,threads=64,wall=6.041027313,c parse 3.459s register 0.378s check 1.003s sequential 0.001s cnf 0.010s total 4.853s,s VERIFIED
+953e9ff735bdf5ada27b0ab2b908b6af.lrat,batch=1024MB,threads=192,wall=7.411581412,c parse 5.333s register 0.272s check 0.683s sequential 0.002s cnf 0.010s total 6.302s,s VERIFIED
+953e9ff735bdf5ada27b0ab2b908b6af.blrat,batch=32MB,threads=8,wall=.046220047,,
+953e9ff735bdf5ada27b0ab2b908b6af.blrat,batch=32MB,threads=32,wall=.041806292,,
+953e9ff735bdf5ada27b0ab2b908b6af.blrat,batch=32MB,threads=64,wall=.042236571,,
+953e9ff735bdf5ada27b0ab2b908b6af.blrat,batch=32MB,threads=192,wall=.041828881,,
+953e9ff735bdf5ada27b0ab2b908b6af.blrat,batch=256MB,threads=8,wall=.042008921,,
+953e9ff735bdf5ada27b0ab2b908b6af.blrat,batch=256MB,threads=32,wall=.040269543,,
+953e9ff735bdf5ada27b0ab2b908b6af.blrat,batch=256MB,threads=64,wall=.041806072,,
+953e9ff735bdf5ada27b0ab2b908b6af.blrat,batch=256MB,threads=192,wall=.041954882,,
+953e9ff735bdf5ada27b0ab2b908b6af.blrat,batch=1024MB,threads=8,wall=.042445021,,
+953e9ff735bdf5ada27b0ab2b908b6af.blrat,batch=1024MB,threads=32,wall=.042155541,,
+953e9ff735bdf5ada27b0ab2b908b6af.blrat,batch=1024MB,threads=64,wall=.041849521,,
+953e9ff735bdf5ada27b0ab2b908b6af.blrat,batch=1024MB,threads=192,wall=.042468361,,
+TUNE-DONE
