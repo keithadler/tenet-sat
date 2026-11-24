@@ -57,7 +57,7 @@ Read these with care:
 - **cake_lpr is formally verified; tenet-sat is not.** The speedup over cake_lpr is a difference in trust as well
   as in speed. People who need a verified answer should still run cake_lpr.
 - **One machine, one solver, six proofs.** Proofs from other solvers, binary LRAT, and other hardware were not
-  timed on this machine.
+  timed on this machine. Binary LRAT was checked for correctness (see below), not for speed.
 - **The spread between proofs is real.** 953e has few long-lived clauses and parallelizes well; bc7d and e5a7 carry
   45 to 49 million original clauses, which tenet-sat loads and stores before checking starts.
 
@@ -147,8 +147,14 @@ transparent huge pages (fewer page faults, mixed timing); larger collector nurse
   The first version rejected that; lrat-check, lrat-trim and cake_lpr skip such a hint, and tenet-sat now does
   too. Skipping a hint can never make an invalid step pass, since the step still has to reach a conflict from
   the hints that remain.
-- **600 corrupted proofs** (300 each from two small CaDiCaL proofs, `fuzz-vs-cake_lpr.txt`): tenet-sat and
+- **600 corrupted text proofs** (300 each from two small CaDiCaL proofs, `fuzz-vs-cake_lpr.txt`): tenet-sat and
   cake_lpr gave the same verdict on every one (392 rejected, 208 accepted).
+- **1,000 corrupted binary proofs** (500 each from the same two problems as binary LRAT,
+  `fuzz-binary-vs-cake_lpr.txt`, run on a Mac): no mutant was accepted by tenet-sat and rejected by cake_lpr.
+  Both rejected 785 and both accepted 139. The other 76 repeat a step with the same clause ID, which tenet-sat
+  rejects by rule and cake_lpr accepts by letting the copy replace the original. Mutations: dropped, flipped,
+  replaced and swapped hints and literals, a hint's clause deleted just before use, dropped and repeated steps,
+  single flipped bits and truncated files; each mutant was checked at 1 and 8 threads with 1 MB and 1 GB batches.
 - **32 unit tests**, including a fuzz comparison against an independent reference checker, a check that the
   parallel formula loader matches the sequential one on awkward input, and a check that `--read` and the memory
   map give the same verdict and message on every test.

@@ -46,6 +46,7 @@ GBD hash; the six timed ones are in `bench-list.txt`.
 | `tune3.log` | first rework: 1 GB batches, parallel formula loading, garbage-collector counters, `--read`, and a larger GC nursery |
 | `tune4.log` | after clauses moved into shared slabs |
 | `final-scaling.txt` | final build, best of 3 runs (1 run at 1 thread) |
+| `fuzz-binary-vs-cake_lpr.txt` | 1,000 corrupted binary proofs against cake_lpr, run on an Apple silicon Mac (`scripts/fuzz_binary_vs_cake_lpr.py`) |
 | `fuzz-vs-cake_lpr.txt` | final build against cake_lpr on 300 corrupted copies each of two small CaDiCaL proofs (`scripts/small_instances.py`, `scripts/fuzz_vs_cake_lpr.py`) |
 | `final-verify-all.txt` | final build: every one of the 77 proofs at 1 and 64 threads |
 

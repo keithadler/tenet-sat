@@ -9,7 +9,7 @@ it checks the proof with many threads, 4 to 19 times faster than the fastest exi
 
 ![tests](https://img.shields.io/badge/tests-32%20passing-1f6f43)
 ![real proofs](https://img.shields.io/badge/real%20proofs-77%2F77%20verified-1f6f43)
-![agrees with cake_lpr](https://img.shields.io/badge/agrees%20with%20cake__lpr-600%2F600%20mutants-1f6f43)
+![agrees with cake_lpr](https://img.shields.io/badge/agrees%20with%20cake__lpr-1600%20corrupted%20proofs-1f6f43)
 ![license](https://img.shields.io/badge/license-Apache--2.0-2b3f8f)
 ![.NET 10](https://img.shields.io/badge/.NET-10-5b3f8f)
 
@@ -47,7 +47,8 @@ with default settings. Seconds, lower is better.
 | e5a7 | 7.11 GB | **4.23** | 23.82 | 73.73 | 252.85 | 5.6x |
 
 - **Correct on the same data.** All 77 proofs generated verify with tenet-sat (at 1 and 64 threads), lrat-check,
-  lrat-trim and cake_lpr. On 600 deliberately corrupted proofs, tenet-sat and cake_lpr gave the same verdict every time.
+  lrat-trim and cake_lpr. On 1,600 deliberately corrupted proofs (600 text, 1,000 binary), tenet-sat never accepted
+  one that cake_lpr rejected; the only differences are repeated clause IDs, which tenet-sat rejects by rule.
 - **The speed comes from cores.** On one core tenet-sat is about as fast as lrat-trim, at worst half as fast.
 - **It is fastest at 48 to 64 threads** on this two-processor machine and slower at 192.
 
@@ -123,7 +124,8 @@ more time than parsing.
   assignment. A satisfied hint adds nothing and is skipped, as lrat-check, lrat-trim and cake_lpr do: CaDiCaL
   proofs contain such hints (one of 77 real proofs here did). A hint with two unassigned literals and no true one
   rejects the step.
-- Addition IDs must strictly increase (true of drat-trim, lrat-trim and CaDiCaL output).
+- Addition IDs must strictly increase (true of drat-trim, lrat-trim and CaDiCaL output). A step that repeats an
+  earlier ID is rejected; cake_lpr instead lets the new clause replace the old one.
 - Text proofs hold one step per line.
 - RAT steps are supported. Checking that all clauses with the negated pivot are listed scans the whole clause
   store, so RAT-heavy proofs will be slow.
@@ -138,8 +140,10 @@ dotnet test -c Release
 32 tests, including a fuzz comparison against an independent reference checker written for the tests, a check that
 the parallel formula loader matches the sequential one on awkward input (clauses split across lines, comments,
 malformed files), and a check that `--read` and the memory map give the same verdict and message on every test.
-`scripts/fuzz_vs_cake_lpr.py` compares against cake_lpr on corrupted proofs; `scripts/small_instances.py` writes
-the two small formulas it uses.
+`scripts/fuzz_vs_cake_lpr.py` (text) and `scripts/fuzz_binary_vs_cake_lpr.py` (binary) compare against cake_lpr on
+corrupted proofs; `scripts/small_instances.py` writes the two small formulas they use. The binary fuzzer corrupts
+decoded steps, flips bits, truncates and repeats steps, and checks each mutant at 1 and 8 threads with 1 MB and
+1 GB batches, so the parallel binary parser's guessed chunk starts are exercised.
 
 ## What it is not
 

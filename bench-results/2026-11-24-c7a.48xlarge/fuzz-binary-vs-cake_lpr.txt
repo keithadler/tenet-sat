@@ -1,0 +1,37 @@
+# Binary LRAT fuzz against cake_lpr, 2026-11-24, on an Apple silicon Mac
+# tenet-sat f9658c0+ (Release, .NET 10), cake_lpr 033aad5 (arm8 build), CaDiCaL e4d9bd9 binary LRAT
+# python3 scripts/fuzz_binary_vs_cake_lpr.py . r250 500 11   and   ... php9 500 12
+
+r250: 84535 steps (68879 additions), 5218675 bytes
+tenetsat=reject cake_lpr=reject: 390
+tenetsat=reject cake_lpr=accept: 48
+tenetsat=accept cake_lpr=accept: 62
+  drop hint          rej/rej 44
+  flip literal       rej/rej 47
+  drop literal       rej/rej 46
+  replace hint       rej/rej 53
+  drop step          rej/rej 31  acc/acc 16
+  delete hint first  rej/rej 51
+  swap hints         rej/rej 12  acc/acc 40
+  flip a bit         rej/rej 53  acc/acc 1
+  truncate           rej/rej 53
+  duplicate step     rej/acc 48  acc/acc 5
+expected difference (duplicate step): tenet-sat rejects a repeated clause ID, cake_lpr accepts: 48
+unexplained disagreements: 0  (tenet-sat accepting what cake_lpr rejects: 0)
+php9: 556303 steps (403295 additions), 27964104 bytes
+tenetsat=reject cake_lpr=reject: 395
+tenetsat=reject cake_lpr=accept: 28
+tenetsat=accept cake_lpr=accept: 77
+  drop hint          rej/rej 45
+  flip literal       rej/rej 51
+  drop literal       rej/rej 46
+  replace hint       rej/rej 52
+  drop step          rej/rej 42  acc/acc 20
+  delete hint first  rej/rej 49
+  swap hints         rej/rej 4  acc/acc 47
+  flip a bit         rej/rej 45  acc/acc 1
+  truncate           rej/rej 61
+  duplicate step     rej/acc 28  acc/acc 9
+expected difference (duplicate step): tenet-sat rejects a repeated clause ID, cake_lpr accepts: 28
+unexplained disagreements: 0  (tenet-sat accepting what cake_lpr rejects: 0)
+
