@@ -119,14 +119,6 @@ more time than parsing.
 
 ## Acceptance rules
 
-- Every hint must be a clause that is live at that step and is unit, falsified or satisfied under the current assignment. A satisfied hint adds nothing and is skipped, as lrat-check, lrat-trim and cake_lpr do: CaDiCaL proofs contain such hints (one of 77 real proofs here did). A hint with two unassigned literals and no true one rejects the step.
-- Addition IDs must strictly increase (true of drat-trim, lrat-trim and CaDiCaL output).
-- Text proofs hold one step per line.
-- RAT steps are supported. Checking that all clauses with the negated pivot are listed scans the whole clause store, so RAT-heavy proofs will be slow.
-- The verdict does not depend on thread count or batch size.
-
-## Acceptance rules
-
 - Every hint must be a clause that is live at that step and is unit, falsified or satisfied under the current
   assignment. A satisfied hint adds nothing and is skipped, as lrat-check, lrat-trim and cake_lpr do: CaDiCaL
   proofs contain such hints (one of 77 real proofs here did). A hint with two unassigned literals and no true one
