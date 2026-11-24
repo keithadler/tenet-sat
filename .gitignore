@@ -1,0 +1,6 @@
+bin/
+obj/
+*.lrat
+*.drat
+tools/
+dist/

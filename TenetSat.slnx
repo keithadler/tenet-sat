@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TenetSat.Core/TenetSat.Core.csproj" />
+    <Project Path="src/TenetSat/TenetSat.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TenetSat.Tests/TenetSat.Tests.csproj" />
+  </Folder>
+</Solution>
