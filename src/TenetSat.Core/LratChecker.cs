@@ -5,9 +5,15 @@ namespace TenetSat;
 
 public sealed class CheckOptions
 {
-    public int Threads { get; init; } = Environment.ProcessorCount;
-    /// <summary>Proof bytes per batch.</summary>
-    public long BatchBytes { get; init; } = 32L << 20;
+    public int Threads { get; init; } = Math.Min(Environment.ProcessorCount, 64);
+    /// <summary>Proof bytes per batch. Large batches mean fewer synchronization points per proof.</summary>
+    public long BatchBytes { get; init; } = 1L << 30;
+    /// <summary>
+    /// Read text proofs with ordinary file reads into a reused buffer instead of through the
+    /// memory map. On many cores, page faults on one shared mapping can make parsing slower
+    /// as threads are added.
+    /// </summary>
+    public bool ReadIntoBuffer { get; init; }
 }
 
 public sealed class CheckResult
@@ -31,6 +37,19 @@ public sealed class CheckResult
     /// <summary>Binary chunks whose guessed start was wrong and were parsed again.</summary>
     public long BinaryReparses { get; init; }
     public TimeSpan TotalTime { get; init; }
+    /// <summary>Garbage collections during the check, by generation.</summary>
+    public int Gen0Collections { get; init; }
+    public int Gen1Collections { get; init; }
+    public int Gen2Collections { get; init; }
+    /// <summary>Time the garbage collector held all threads during the check.</summary>
+    public TimeSpan GcPause { get; init; }
+    /// <summary>Thread-seconds spent getting chunk memory while parsing (summed over threads).</summary>
+    public double ParseAllocThreadSeconds { get; init; }
+    /// <summary>Thread-seconds spent parsing (summed over threads).</summary>
+    public double ParseWorkThreadSeconds { get; init; }
+    public long LockContentions { get; init; }
+    public long SlabsRecycled { get; init; }
+    public long SlabsReused { get; init; }
 }
 
 /// <summary>
@@ -59,12 +78,14 @@ public static unsafe class LratChecker
         int threads = Math.Max(1, options.Threads);
         var po = new ParallelOptions { MaxDegreeOfParallelism = threads };
         var total = Stopwatch.StartNew();
+        int gc0 = GC.CollectionCount(0), gc1 = GC.CollectionCount(1), gc2 = GC.CollectionCount(2);
+        var gcPause = GC.GetTotalPauseDuration();
         var parseTime = new Stopwatch();
         var checkTime = new Stopwatch();
 
         var db = new ClauseDb();
         bool sawEmpty;
-        try { CnfParser.Load(cnfPath, db, out sawEmpty); }
+        try { CnfParser.Load(cnfPath, db, threads, out sawEmpty); }
         catch (FormatException e) { return new CheckResult { Message = e.Message, TotalTime = total.Elapsed }; }
         long original = db.MaxId;
         var cnfTime = total.Elapsed;
@@ -82,9 +103,30 @@ public static unsafe class LratChecker
         long binaryReparses = 0;
         var sequentialTime = new Stopwatch();
         var registerTime = new Stopwatch();
+        byte* buffer = null;
+        long bufferSize = 0;
+        long slack = 16L << 20;
+        using var handle = options.ReadIntoBuffer && !binary ? File.OpenHandle(lratPath) : null;
+        // Chunks are reused from batch to batch, and each one's arrays are sized from what the
+        // previous batch showed about this proof (steps, hints and literals per byte). Growing
+        // arrays while parsing means many large allocations, which serialize on many cores.
+        var pool = new StepChunk?[pieces];
+        long allocTicks = 0, workTicks = 0;
+        long contention0 = Monitor.LockContentionCount;
+        double stepsPerByte = 0, refsPerByte = 0, litsPerByte = 0;
+        StepChunk Fresh(int k, long bytes)
+        {
+            int steps = Size(bytes * stepsPerByte, 1024), refs = Size(bytes * refsPerByte, 8192), lits = Size(bytes * litsPerByte, 1 << 16);
+            var c = pool[k];
+            if (c is null) pool[k] = c = new StepChunk(steps, refs, lits, db);
+            else c.Reset(steps, refs, lits, db);
+            return c;
+        }
+        try {
 
         while (offset < length && failure is null)
         {
+            long batchStart = offset;
             // 1. parse
             parseTime.Start();
             StepChunk[] chunks;
@@ -106,7 +148,7 @@ public static unsafe class LratChecker
                 Parallel.For(0, pieces, po, k =>
                 {
                     if (starts[k] >= starts[k + 1]) return;
-                    var chunk = new StepChunk();
+                    var chunk = Fresh(k, starts[k + 1] - starts[k]);
                     byte* b = file.Ptr;
                     ends[k] = LratBinaryParser.Parse(b, b + starts[k], b + starts[k + 1], b + fileLength, chunk) - b;
                     parsed[k] = chunk;
@@ -132,24 +174,68 @@ public static unsafe class LratChecker
             }
             else
             {
-                long batchEnd = AfterNewline(start, Math.Min(length, offset + Math.Max(1, options.BatchBytes)), length);
+                // `text` points at file offset 0, either the mapping itself or, in read mode, a
+                // buffer that holds the window [offset, windowEnd) shifted so that text[x] is
+                // still file byte x. Only bytes inside the window are ever read.
+                byte* text = start;
+                long want = Math.Min(length, offset + Math.Max(1, options.BatchBytes));
+                long windowEnd = length;
+                if (handle is not null)
+                {
+                    while (true)
+                    {
+                        windowEnd = Math.Min(length, want + slack);
+                        long size = windowEnd - offset;
+                        if (size > bufferSize)
+                        {
+                            if (buffer != null) System.Runtime.InteropServices.NativeMemory.Free(buffer);
+                            buffer = (byte*)System.Runtime.InteropServices.NativeMemory.Alloc((nuint)size);
+                            bufferSize = size;
+                        }
+                        ReadRange(handle, buffer, offset, size, po);
+                        text = buffer - offset;
+                        // The batch must end at a line start inside the window; widen the window
+                        // for a line longer than the slack.
+                        if (windowEnd == length || HasNewline(text, want, windowEnd)) break;
+                        slack *= 2;
+                    }
+                }
+                long batchEnd = AfterNewline(text, want, windowEnd);
                 var bounds = new long[pieces + 1];
                 bounds[0] = offset;
                 for (int k = 1; k < pieces; k++)
-                    bounds[k] = Math.Max(bounds[k - 1], AfterNewline(start, offset + (batchEnd - offset) * k / pieces, batchEnd));
+                {
+                    // `offset` itself starts a line; never look at the byte before it, which in
+                    // read mode lies outside the window.
+                    long guess = offset + (batchEnd - offset) * k / pieces;
+                    bounds[k] = Math.Max(bounds[k - 1], guess <= offset ? offset : AfterNewline(text, guess, batchEnd));
+                }
                 bounds[pieces] = batchEnd;
                 chunks = new StepChunk[pieces];
-                var file = proof;
+                byte* textBase = text;
+                // Every chunk gets its memory here, on one thread: large allocations from many
+                // threads at once serialize inside the runtime and dominated parsing on 192 cores.
+                long a0 = Stopwatch.GetTimestamp();
+                for (int k = 0; k < pieces; k++) chunks[k] = Fresh(k, bounds[k + 1] - bounds[k]);
+                allocTicks += Stopwatch.GetTimestamp() - a0;
                 Parallel.For(0, pieces, po, k =>
                 {
-                    var chunk = new StepChunk();
-                    byte* b = file.Ptr;
-                    LratTextParser.Parse(b, b + bounds[k], b + bounds[k + 1], chunk);
-                    chunks[k] = chunk;
+                    var chunk = chunks[k];
+                    long t1 = Stopwatch.GetTimestamp();
+                    LratTextParser.Parse(textBase, textBase + bounds[k], textBase + bounds[k + 1], chunk);
+                    long t2 = Stopwatch.GetTimestamp();
+                    Interlocked.Add(ref workTicks, t2 - t1);
                 });
                 offset = batchEnd;
             }
             parseTime.Stop();
+
+            // What this batch looked like, for sizing the next one's arrays.
+            {
+                long bytes = Math.Max(1, offset - batchStart), steps = 0, refs = 0, lits = 0;
+                foreach (var c in chunks) { steps += c.Count; refs += c.RefCount; lits += c.Lits.Used; }
+                stepsPerByte = (double)steps / bytes; refsPerByte = (double)refs / bytes; litsPerByte = (double)lits / bytes;
+            }
 
             // 2a. validate ordering across chunks. This is the only single-threaded work in a
             //     batch and it touches one summary per chunk, not the steps.
@@ -179,13 +265,15 @@ public static unsafe class LratChecker
 
             // 2b. register every addition. IDs are distinct, so chunks never write the same slot.
             registerTime.Start();
+            foreach (var chunk in chunks)
+                if (chunk.AddCount > 0) chunk.Slab = db.RegisterSlab(chunk.Lits.Data, chunk.AddCount);
             Parallel.For(0, chunks.Length, po, k =>
             {
                 var chunk = chunks[k];
                 long runPage = 0;
                 int runCount = 0;
                 for (int j = 0; j < chunk.Count; j++)
-                    if (chunk.Clauses[j] is { } clause) db.AddConcurrent(chunk.Ids[j], clause, ref runPage, ref runCount);
+                    if (chunk.IsAddition(j)) db.AddConcurrent(chunk.Ids[j], chunk.Slab, chunk.ClauseOff[j], ref runPage, ref runCount);
                 db.FlushRun(runPage, runCount);
             });
             db.NoteLiveDelta(batchAdds);
@@ -202,14 +290,14 @@ public static unsafe class LratChecker
                 int steps = 0;
                 for (int j = 0; j < chunk.Count; j++)
                 {
-                    if (chunk.Clauses[j] is not null) { last = chunk.Ids[j]; continue; }
+                    if (chunk.IsAddition(j)) { last = chunk.Ids[j]; continue; }
                     steps++;
                     int stamp = chunk.Base + j;
                     foreach (long r in chunk.RefsOf(j))
                     {
                         if (r > last) continue;
                         var c = db.Get(r);
-                        if (c is null) continue;
+                        if (c.IsNull) continue;
                         int seen = Volatile.Read(ref c[0]);
                         while (stamp < seen)
                         {
@@ -235,8 +323,8 @@ public static unsafe class LratChecker
                     var chunk = chunks[k];
                     for (int j = 0; j < chunk.Count; j++)
                     {
-                        var clause = chunk.Clauses[j];
-                        if (clause is null) continue;
+                        var clause = chunk.ClauseAt(j);
+                        if (clause.IsNull) continue;
                         int stepIndex = chunk.Base + j;
                         if (stepIndex > Volatile.Read(ref failIndex)) break;
                         if (checker.Check(chunk.Ids[j], clause, chunk.RefsOf(j), stepIndex)) continue;
@@ -265,11 +353,11 @@ public static unsafe class LratChecker
                 long count = 0;
                 for (int j = 0; j < chunk.Count; j++)
                 {
-                    if (chunk.Clauses[j] is not null) continue;
+                    if (chunk.IsAddition(j)) continue;
                     foreach (long r in chunk.RefsOf(j))
                     {
                         var c = db.Get(r);
-                        if (c is not null && c[0] != ClauseDb.Live && db.RemoveConcurrent(r)) count++;
+                        if (!c.IsNull && c[0] != ClauseDb.Live && db.RemoveConcurrent(r)) count++;
                     }
                 }
                 Interlocked.Add(ref removed, count);
@@ -277,6 +365,8 @@ public static unsafe class LratChecker
             db.NoteLiveDelta(-removed);
             registerTime.Stop();
         }
+
+        } finally { if (buffer != null) System.Runtime.InteropServices.NativeMemory.Free(buffer); }
 
         foreach (var c in checkers) ratSteps += c.RatSteps;
         bool verified = failure is null && sawEmpty;
@@ -298,11 +388,47 @@ public static unsafe class LratChecker
             CnfTime = cnfTime,
             BinaryReparses = binaryReparses,
             TotalTime = total.Elapsed,
+            Gen0Collections = GC.CollectionCount(0) - gc0,
+            Gen1Collections = GC.CollectionCount(1) - gc1,
+            Gen2Collections = GC.CollectionCount(2) - gc2,
+            GcPause = GC.GetTotalPauseDuration() - gcPause,
+            ParseAllocThreadSeconds = (double)allocTicks / Stopwatch.Frequency,
+            ParseWorkThreadSeconds = (double)workTicks / Stopwatch.Frequency,
+            LockContentions = Monitor.LockContentionCount - contention0,
+            SlabsRecycled = db.SlabsRecycled,
+            SlabsReused = db.SlabsReused,
         };
     }
 
+    /// <summary>An array size: the estimate plus 15%, at least <paramref name="min"/>.</summary>
+    private static int Size(double estimate, int min) => (int)Math.Clamp(estimate * 1.15 + 64, min, Array.MaxLength / 2);
+
     private static string IdOrder(long id, long previous) =>
         $"step {id}: clause IDs must strictly increase (previous was {previous})";
+
+    /// <summary>Whether a line ends in [<paramref name="from"/>, <paramref name="to"/>).</summary>
+    private static bool HasNewline(byte* b, long from, long to)
+    {
+        for (long i = Math.Max(0, from - 1); i < to; i++) if (b[i] == '\n') return true;
+        return false;
+    }
+
+    /// <summary>Reads file bytes [offset, offset + size) into <paramref name="dest"/> on several threads.</summary>
+    private static void ReadRange(Microsoft.Win32.SafeHandles.SafeFileHandle handle, byte* dest, long offset, long size, ParallelOptions po)
+    {
+        const long Piece = 8L << 20;
+        long pieces = (size + Piece - 1) / Piece;
+        Parallel.For(0L, pieces, po, k =>
+        {
+            long from = k * Piece, to = Math.Min(size, from + Piece);
+            while (from < to)
+            {
+                int n = RandomAccess.Read(handle, new Span<byte>(dest + from, (int)(to - from)), offset + from);
+                if (n <= 0) throw new IOException("proof file ended early");
+                from += n;
+            }
+        });
+    }
 
     /// <summary>The first offset at or after <paramref name="off"/> that starts a line.</summary>
     private static long AfterNewline(byte* b, long off, long limit)

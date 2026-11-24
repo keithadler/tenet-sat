@@ -1,5 +1,9 @@
 import random, subprocess, sys, collections
+# usage: fuzz_vs_cake_lpr.py <tenet-sat checkout> <name> <count>   (reads name.cnf and name.lrat)
+# Set TENETSAT to a tenetsat binary to use it instead of the Release build run through dotnet.
+import os
 W, name, N = sys.argv[1], sys.argv[2], int(sys.argv[3])
+TENETSAT = [os.environ["TENETSAT"]] if os.environ.get("TENETSAT") else ["dotnet", W + "/src/TenetSat/bin/Release/net10.0/tenetsat.dll"]
 lines = open(name + ".lrat").read().splitlines()
 random.seed(11)
 tally = collections.Counter(); bad = []
@@ -26,7 +30,7 @@ for n in range(N):
         a = random.randrange(z + 1, len(t) - 2); t[a], t[a+1] = t[a+1], t[a]
     if t is not None: L[i] = " ".join(t)
     open("mut.lrat", "w").write("\n".join(L) + "\n")
-    ours = "s VERIFIED" in run(["dotnet", W + "/src/TenetSat/bin/Release/net10.0/tenetsat.dll", "check", name + ".cnf", "mut.lrat"])
+    ours = "s VERIFIED" in run(TENETSAT + ["check", name + ".cnf", "mut.lrat"])
     cake = "s VERIFIED UNSAT" in run([W + "/tools/cake_lpr/cake_lpr", name + ".cnf", "mut.lrat"])
     tally[(ours, cake)] += 1
     if ours != cake:

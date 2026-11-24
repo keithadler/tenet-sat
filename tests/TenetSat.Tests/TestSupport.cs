@@ -199,7 +199,7 @@ internal static class ReferenceChecker
         {
             int r = Propagate(db, truth, hints[i]);
             if (r == 0) return true;
-            if (r < 0) return false;
+            if (r < 0) return false;   // 2 = satisfied: skipped
         }
         if (lits.Count == 0) return false;
         int negPivot = -lits[0];
@@ -230,7 +230,7 @@ internal static class ReferenceChecker
         return true;
     }
 
-    /// <summary>0 conflict, 1 unit, -1 unusable hint.</summary>
+    /// <summary>0 conflict, 1 unit, 2 satisfied (skipped), -1 unusable hint.</summary>
     private static int Propagate(Dictionary<long, int[]> db, HashSet<int> truth, long hint)
     {
         if (!db.TryGetValue(hint, out var c)) return -1;
@@ -238,10 +238,11 @@ internal static class ReferenceChecker
         foreach (int l in c)
         {
             if (truth.Contains(-l)) continue;
-            if (truth.Contains(l)) return -1;
-            if (unit != 0 && unit != l) return -1;
-            unit = l;
+            if (truth.Contains(l)) return 2;   // satisfied: adds nothing, skipped
+            if (unit != 0 && unit != l) unit = int.MinValue;
+            else if (unit != int.MinValue) unit = l;
         }
+        if (unit == int.MinValue) return -1;
         if (unit == 0) return 0;
         truth.Add(unit);
         return 1;

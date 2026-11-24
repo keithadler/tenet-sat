@@ -5,8 +5,13 @@ public class LratCheckerTests
     private static bool Verify(string cnf, string lrat, int threads = 4, long batchBytes = 1 << 20)
     {
         using var dir = new TempDir();
-        return LratChecker.Check(dir.File("f.cnf", cnf), dir.File("p.lrat", lrat),
-            new CheckOptions { Threads = threads, BatchBytes = batchBytes }).Verified;
+        string f = dir.File("f.cnf", cnf), p = dir.File("p.lrat", lrat);
+        var mapped = LratChecker.Check(f, p, new CheckOptions { Threads = threads, BatchBytes = batchBytes });
+        // Reading the proof with file reads must give exactly the same answer as the memory map.
+        var read = LratChecker.Check(f, p, new CheckOptions { Threads = threads, BatchBytes = batchBytes, ReadIntoBuffer = true });
+        Assert.Equal(mapped.Verified, read.Verified);
+        Assert.Equal(mapped.Message, read.Message);
+        return mapped.Verified;
     }
 
     private const string XAndNotX = "p cnf 1 2\n1 0\n-1 0\n";
@@ -43,6 +48,14 @@ public class LratCheckerTests
     [Fact]
     public void RejectsNonUnitHint() =>
         Assert.False(Verify("p cnf 2 3\n1 2 0\n-1 2 0\n-2 0\n", "4 0 1 3 0\n"));
+
+    // A hint that is already satisfied adds nothing and is skipped, as lrat-check, lrat-trim
+    // and cake_lpr do. CaDiCaL wrote one into a real 2.1 GB proof (SAT Competition 2023).
+    [Fact]
+    public void SkipsSatisfiedHint() => Assert.True(Verify("p cnf 2 3\n1 0\n-1 0\n1 2 0\n", "4 0 1 3 2 0\n"));
+
+    [Fact]
+    public void RejectsHintWithTwoFreeLiterals() => Assert.False(Verify("p cnf 2 3\n1 0\n-1 0\n1 2 0\n", "4 0 3 1 2 0\n"));
 
     [Fact]
     public void RejectsMalformedProof() => Assert.False(Verify(XAndNotX, "3 0 1 2\n"));

@@ -6,13 +6,14 @@ namespace TenetSat;
 /// Checks single LRAT addition steps. One instance per worker thread; it only reads
 /// the shared <see cref="ClauseDb"/>.
 ///
-/// The check is strict: every hint must be a clause that is live at this step and is
-/// unit or falsified under the current assignment. A hint with a satisfied literal or
-/// two unassigned literals rejects the step.
+/// Every hint must be a clause that is live at this step. Under the current assignment it
+/// must be unit or falsified, or satisfied: a satisfied hint adds nothing and is skipped,
+/// as lrat-check, lrat-trim and cake_lpr do (CaDiCaL proofs contain such hints). A hint
+/// with two unassigned literals and no true one rejects the step.
 /// </summary>
 internal sealed class StepChecker
 {
-    private enum Hint { Unit, Conflict, Bad }
+    private enum Hint { Unit, Conflict, Satisfied, Bad }
 
     private readonly ClauseDb _db;
     private int[] _mark = new int[4096];   // _mark[code(lit)] == _gen  <=>  lit is true
@@ -48,33 +49,36 @@ internal sealed class StepChecker
 
     /// <summary>A clause usable by the step with this ID at this batch-local index, or null.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private int[]? LiveAt(long hintId, long stepId, int stepIndex)
+    private Clause LiveAt(long hintId, long stepId, int stepIndex)
     {
-        if (hintId >= stepId) return null;          // IDs increase, so this means "added later"
+        if (hintId >= stepId) return default;          // IDs increase, so this means "added later"
         var c = _db.Get(hintId);
-        if (c is null || c[0] <= stepIndex) return null; // never existed, or deleted earlier
+        if (c.IsNull || c[0] <= stepIndex) return default; // never existed, or deleted earlier
         return c;
     }
 
     private Hint Propagate(long hintId, long stepId, int stepIndex)
     {
         var c = LiveAt(hintId, stepId, stepIndex);
-        if (c is null) { Error = $"hint {hintId} is not a live clause"; return Hint.Bad; }
+        if (c.IsNull) { Error = $"hint {hintId} is not a live clause"; return Hint.Bad; }
         int unit = 0;
-        for (int k = 1; k < c.Length; k++)
+        bool twoFree = false;
+        int len = c.Length;
+        for (int k = 1; k < len; k++)
         {
             int l = c[k];
             if (IsTrue(-l)) continue;
-            if (IsTrue(l)) { Error = $"hint {hintId} is already satisfied"; return Hint.Bad; }
-            if (unit != 0 && unit != l) { Error = $"hint {hintId} is not unit"; return Hint.Bad; }
-            unit = l;
+            if (IsTrue(l)) return Hint.Satisfied; // adds nothing; skipping it cannot help a step pass
+            if (unit != 0 && unit != l) twoFree = true;
+            else unit = l;
         }
+        if (twoFree) { Error = $"hint {hintId} is not unit"; return Hint.Bad; }
         if (unit == 0) return Hint.Conflict;
         Assign(unit);
         return Hint.Unit;
     }
 
-    public bool Check(long id, int[] clause, ReadOnlySpan<long> hints, int stepIndex)
+    public bool Check(long id, Clause clause, ReadOnlySpan<long> hints, int stepIndex)
     {
         if (++_gen == int.MaxValue) { Array.Clear(_mark); _gen = 1; }
         _trailLen = 0;
@@ -128,7 +132,7 @@ internal sealed class StepChecker
         {
             long cid = -hints[i++];
             var c = LiveAt(cid, id, stepIndex);
-            if (c is null) { Error = $"RAT candidate {cid} is not a live clause"; return false; }
+            if (c.IsNull) { Error = $"RAT candidate {cid} is not a live clause"; return false; }
 
             bool conflict = false;
             for (int k = 1; k < c.Length; k++)
