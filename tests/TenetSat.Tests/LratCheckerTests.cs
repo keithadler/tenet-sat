@@ -57,6 +57,28 @@ public class LratCheckerTests
     [Fact]
     public void RejectsHintWithTwoFreeLiterals() => Assert.False(Verify("p cnf 2 3\n1 0\n-1 0\n1 2 0\n", "4 0 3 1 2 0\n"));
 
+    /// <summary>A link's own size is the length of its target path, not of the file: read the file.</summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(5000)]
+    public void FollowsSymbolicLinks(int padding)
+    {
+        if (OperatingSystem.IsWindows()) return; // creating links there needs a privilege
+        using var dir = new TempDir();
+        string pad = padding == 0 ? "" : "c " + new string('x', padding) + "\n";
+        dir.File("f.cnf", pad + XAndNotX);
+        dir.File("p.lrat", pad + "3 0 1 2 0\n");
+        string cnf = System.IO.Path.Combine(dir.Path, "link.cnf"), lrat = System.IO.Path.Combine(dir.Path, "link.lrat");
+        File.CreateSymbolicLink(cnf, "f.cnf");
+        File.CreateSymbolicLink(lrat, "p.lrat");
+        using (var mapped = new MappedFile(cnf)) Assert.Equal(pad.Length + XAndNotX.Length, mapped.Length);
+        foreach (bool read in new[] { false, true })
+        {
+            var r = LratChecker.Check(cnf, lrat, new CheckOptions { ReadIntoBuffer = read });
+            Assert.True(r.Verified, r.Message);
+        }
+    }
+
     [Fact]
     public void RejectsMalformedProof() => Assert.False(Verify(XAndNotX, "3 0 1 2\n"));
 
